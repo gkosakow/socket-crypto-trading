@@ -38,6 +38,7 @@ struct Arguments{
 int main(int argc, char* argv[]){
     //Defining dbFile to be opened by openDB.
     sqlite3* DB;
+    struct sqlite3_stmt *selectstmt;
     const char* dbFile = "cis427_crypto.sqlite";
 
     // Opens SQLite3 database file and if the return code returns anything but 0 (SQLITE_OK), results as an error and outputs "Cannot open db"
@@ -78,7 +79,6 @@ int main(int argc, char* argv[]){
           i++;
           }
       
-
       char *userCommand = commands[0];
 
       // BUY COMMAND BLOCK
@@ -90,36 +90,46 @@ int main(int argc, char* argv[]){
         Buy.crypto_Amount = atof(commands[2]);
         Buy.price_per_crypto = atof(commands[3]);
         Buy.user_ID = atoi(commands[4]);
-
-
         Buy.crypto_Price = Buy.crypto_Amount * Buy.price_per_crypto;
-        if(Buy.crypto_Amount < 0 || Buy.price_per_crypto < 0){
-          printf("Cannot have negative crypto amounts or prices!!\n");
+
+        // Fail BUY command when user inputs a negative value for crypto_Amount or price_per_crypto
+        if(Buy.crypto_Amount <= 0 || Buy.price_per_crypto <= 0){
+          printf("Cannot have negatives or zeroes crypto amounts or prices!!\n");
           continue;
         }
-        printf("Buy.crypto_Price: %f\n",Buy.crypto_Price); //DEBUGGER
 
+        // SELECT usd_balance FROM Users WHERE ID = 1;
+        asprintf(&sql, "SELECT usd_balance FROM Users WHERE ID = '%d';", Buy.user_ID);
+        rc = sqlite3_prepare_v2(DB, sql, -1, &selectstmt, NULL);
 
-        //SELECT usd_balance FROM Users WHERE ID = 1;
-        asprintf(&sql, "UPDATE SET user_Balance = user_Balance ", Buy.user_ID);
-        
-        rc = sqlite3_exec(DB, sql, callback, 0, &zErrMsg);
-        if( rc != SQLITE_OK ) {
-            printf("User does not exist...\n");
-            sqlite3_free(zErrMsg);
-            continue;
-        } else {
-            fprintf(stdout, "Operation done successfully\n");
+        if(rc == SQLITE_OK) {
+          if (sqlite3_step(selectstmt) == SQLITE_ROW) {
+            Buy.user_Balance = sqlite3_column_int (selectstmt, 0);
+            printf("User record fetched.\n");
+            
+            // IF-ELSE BLOCK THAT CHECKS IF THE USER HAS ENOUGH FUNDS.
+            if(Buy.user_Balance - Buy.crypto_Price >= 0){
+              asprintf(&sql, "UPDATE Users SET usd_balance = '%f' - '%f' WHERE ID = '%d';", Buy.user_Balance, Buy.crypto_Price, Buy.user_ID);
+              rc = sqlite3_exec(DB, sql, callback, 0, &zErrMsg);
+                if( rc != SQLITE_OK ) {
+                    fprintf(stderr, "SQL error: %s\n", zErrMsg);
+                    sqlite3_free(zErrMsg);
+                } else {
+                    fprintf(stdout, "usd_Balance done successfully\n");
+                }
+            } else {
+                printf("User does not have enough money.\n");
+                continue;
+            }
+          } else {
+              printf("User record does not exist\n");
+              continue;
+          }
         }
         
-
-        printf("\n");
-        printf("%s\n",sql);
-        
         //only execute if user id exists and when they have enough usd_balance
-        asprintf(&sql, "INSERT INTO Cryptos(crypto_name, crypto_balance, user_id) VALUES('%s', '%f', '%i') ON CONFLICT(crypto_Name) DO UPDATE SET crypto_Balance = crypto_Balance + %f;", Buy.crypto_Name, Buy.crypto_Price, Buy.user_ID, Buy.crypto_Price);
+        asprintf(&sql, "INSERT INTO Cryptos(crypto_name, crypto_balance, user_id) VALUES('%s', '%f', '%i') ON CONFLICT(crypto_Name) DO UPDATE SET crypto_Balance = crypto_Balance + '%f';", Buy.crypto_Name, Buy.crypto_Price, Buy.user_ID, Buy.crypto_Price);
         
-
         rc = sqlite3_exec(DB, sql, callback, 0, &zErrMsg);
         if( rc != SQLITE_OK ) {
             fprintf(stderr, "SQL error: %s\n", zErrMsg);
@@ -128,18 +138,18 @@ int main(int argc, char* argv[]){
             fprintf(stdout, "Insertion done successfully\n");
         }
 
-        // asprintf(&sql, "UPDATE Cryptos SET crypto_Balance = crypto_Balance + %f WHERE crypto_Name = '%s';", Buy.crypto_Price, Buy.crypto_Name);
-        // rc = sqlite3_exec(DB, sql, callback, 0, &zErrMsg);
-        // if( rc != SQLITE_OK ) {
-        //     fprintf(stderr, "SQL error: %s\n", zErrMsg);
-        //     sqlite3_free(zErrMsg);
-        // } else {
-        //     fprintf(stdout, "Update done successfully\n");
-        // }
+        asprintf(&sql, "SELECT crypto_balance FROM Cryptos WHERE crypto_name = '%s';", Buy.crypto_Name);
+        rc = sqlite3_prepare_v2(DB, sql, -1, &selectstmt, NULL);
+
+        if(rc == SQLITE_OK) {
+          if (sqlite3_step(selectstmt) == SQLITE_ROW) {
+            Buy.crypto_Balance = sqlite3_column_int (selectstmt, 0);
+          }
+        }
 
         printf("Received: BUY command\n");
         printf("crypto_Name: %s, crypto_Amount %f, price_per_crypto: %f, user_ID: %d\n", Buy.crypto_Name, Buy.crypto_Amount, Buy.price_per_crypto, Buy.user_ID); //DEBUGGER
-        //BUY(dbFile, crypto_Name, crypto_Amount, price_per_crypto, user_ID);
+        printf("200 OK\nNEW USD_BALANCE: '%f' NEW CRYPTO_BALANCE: '%f'\n", Buy.user_Balance - Buy.crypto_Price, Buy.crypto_Balance);
         continue;
       }
 
