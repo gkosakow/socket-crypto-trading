@@ -42,7 +42,7 @@ int main() {
         exit(1); 
       }
       while ((buf_len = recv(new_s, buf, sizeof(buf), 0)))
-        fputs(buf, stdout);
+        fputs(buf, stdout); // fputs(buf, userInput);
       close(new_s);
     }
 }
