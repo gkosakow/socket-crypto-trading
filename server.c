@@ -95,6 +95,18 @@ int main(int argc, char* argv[]){
     exit(1);
   }
 
+  // counts rows from Users table, if less than 1, INSERT into Users a single user with $100 usd.
+  rc = sqlite3_prepare_v2(DB, "SELECT COUNT(*) FROM Users;", -1, &selectstmt, NULL);
+  if(rc == SQLITE_OK) {
+    if(sqlite3_step(selectstmt) == SQLITE_ROW) {
+      int row_Count = sqlite3_column_double (selectstmt, 0);
+      if(row_Count < 1){
+        sql = "INSERT INTO Users (email, first_name, last_name, user_name, password, usd_balance) VALUES('gkosakow@umich.edu', 'Greg', 'Kosakowski', 'gkosakow', 'password123', 100);";
+        sqlite3_exec(DB, sql, callback, 0, &ErrMsg);
+      }
+    }
+  }           
+
   // waits for connection, then receive and print text
   while(shutdown_Flag == 0) {
     if ((clientSocket = accept(serverSocket, (struct sockaddr *)&client, &addr_len)) < 0) {
@@ -140,7 +152,7 @@ int main(int argc, char* argv[]){
 
         // Break out of BUY command when user inputs a negative value for crypto_Amount or price_per_crypto
         if(Buy.crypto_Amount <= 0 || Buy.price_per_crypto <= 0){
-          returnMessage = "Cannot have negatives or zeroes crypto amounts or prices!!\n";
+          returnMessage = "403 message format error: Cannot have negatives or zeroes crypto amounts or prices.\n";
           send(clientSocket,returnMessage,100,0);
           continue;
         }
@@ -157,12 +169,13 @@ int main(int argc, char* argv[]){
               asprintf(&sql, "UPDATE Users SET usd_balance = usd_balance - '%f' WHERE ID = '%d';", Buy.crypto_Price, Buy.user_ID);
               sqlite3_exec(DB, sql, callback, 0, &ErrMsg);
             } else {
-                returnMessage = "User does not have enough money.\n";     // Notifies user when they do not have enough money for transaction.
+                asprintf(&returnMessage, "403 message format error: Not enough USD in account for user %d.\n", Buy.user_ID);     // Notifies user when they do not have enough money for transaction.
                 send(clientSocket,returnMessage,100,0);
                 continue;
             }
+            
           } else {
-              returnMessage = "User record does not exist.\n";      // Notifies user when there is no existing user with ID input into the system.
+              asprintf(&returnMessage, "403 message format error: User %d does not exist.\n", Buy.user_ID);      // Notifies user when there is no existing user with ID input into the system.
               send(clientSocket,returnMessage,100,0);
               continue;
           }
@@ -204,7 +217,7 @@ int main(int argc, char* argv[]){
 
         // Breaks out of SELL command when user inputs a negative value for crypto_Amount or price_per_crypto
         if(Sell.crypto_Amount <= 0 || Sell.price_per_crypto <= 0){
-          returnMessage = "Cannot have negatives or zeroes crypto amounts or prices!!\n";
+          returnMessage = "403 message format error: Cannot have negatives or zeroes crypto amounts or prices.\n";
           send(clientSocket,returnMessage,100,0);
           continue;
         }
@@ -221,12 +234,12 @@ int main(int argc, char* argv[]){
               asprintf(&sql, "UPDATE Users SET usd_balance = usd_balance + '%f' WHERE ID = '%d';", Sell.crypto_Price, Sell.user_ID);
               rc = sqlite3_exec(DB, sql, callback, 0, &ErrMsg);
             } else {
-                returnMessage = "Crypto funds insufficient.\n";     // Notifies the user when there aren't enough funds in usd_balance for user_ID to buy new crypto.
+                asprintf(&returnMessage, "403 message format error: Not enough %s crypto balance.\n", Sell.crypto_Name);     // Notifies the user when there aren't enough funds in usd_balance for user_ID to buy new crypto.
                 send(clientSocket, returnMessage, 100, 0);
                 continue;
             }
           } else {
-              returnMessage = "Crypto record does not exist.\n";    // Notifies the user that the record does not exist when the balance can't be found for crypto_Name.
+              asprintf(&returnMessage, "403 message format error: Crypto record %s does not exist in Cryptos table.\n", Sell.crypto_Name);      // Notifies the user that the record does not exist when the balance can't be found for crypto_Name.
               send(clientSocket, returnMessage, 100, 0);
               continue;
           }
@@ -306,7 +319,7 @@ int main(int argc, char* argv[]){
       else if(strcmp(commands[0],"SHUTDOWN\n") == 0){
         
         // Notifies the client that the server has shut down.
-        returnMessage = "200 OK\nSERVER HAS BEEN SHUT DOWN\n";
+        returnMessage = "200 OK\nShutting down server...\n";
         send(clientSocket, returnMessage, 100, 0);
         shutdown_Flag = 1;    // When shutdown is called, it sets the shutdown_Flag to one, which ends the do while loop for commands into system.
       }
@@ -315,7 +328,7 @@ int main(int argc, char* argv[]){
 
       else if(strcmp(commands[0],"QUIT\n") == 0){
         // Notifies the client that the server has shut down.
-        returnMessage = "200 OK\nQUITTING CLIENT\n";
+        returnMessage = "200 OK\nQuitting client...\n";
         send(clientSocket,returnMessage,100,0);
         quit_Flag = 1;
       }
@@ -323,7 +336,7 @@ int main(int argc, char* argv[]){
       // Invalid Command input by the user. Tells the user to issue another command.
       else {
         // Notifies the client to issue another command.
-        returnMessage = "Please issue a valid command. Try again.\n";
+        returnMessage = "400 invalid command\n";
         send(clientSocket,returnMessage,100,0);
       }
     }
@@ -331,7 +344,7 @@ int main(int argc, char* argv[]){
     send(clientSocket,"Socket closed",100,0);     // notifies user that client's socket has been closed.
     close(clientSocket);                          // closes the client socket.
   }
-  printf("\nClosing server...\n");
+  printf("Shutting down server...\n");
   close(serverSocket);      // closes server socket
   sqlite3_close(DB);        // closes DB file.
   return(0);                // returns 0 for the main function. 
