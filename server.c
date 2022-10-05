@@ -70,7 +70,7 @@ int main(int argc, char* argv[]){
   struct sockaddr_in client;   // new struct sockaddr_in as client.
   char buf[MAX_LINE];       // declaring buffer for user input as buf[256].
   int addr_len;             // addr length for socket commands.
-  int s, new_s;             // declaring socket ints s and new_s.
+  int serverSocket, clientSocket;             // declaring socket ints serverSocket and clientSocket.
 
   // prepares the sockaddr_in structure
   bzero((char *)&client, sizeof(client));
@@ -78,35 +78,35 @@ int main(int argc, char* argv[]){
   client.sin_addr.s_addr = INADDR_ANY;     // tells socket to listen on network interfaces
   client.sin_port = htons(SERVER_PORT);    // port 5425
 
-  // setting up a passive open and creates new socket s.
-  if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+  // setting up a passive open and creates new socket serverSocket.
+  if ((serverSocket = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
     perror("Could not create socket.");
     exit(1); 
   }
 
   // binds newly created socket to the specified address
-  if ((bind(s, (struct sockaddr *)&client, sizeof(client))) < 0) {
+  if ((bind(serverSocket, (struct sockaddr *)&client, sizeof(client))) < 0) {
     perror("Could not bind socket.");
     exit(1);
   }
   
-  if (listen(s, MAX_PENDING) < 0){
+  if (listen(serverSocket, MAX_PENDING) < 0){
     perror("Listening error.");
     exit(1);
   }
 
   // waits for connection, then receive and print text
   while(shutdown_Flag == 0) {
-    if ((new_s = accept(s, (struct sockaddr *)&client, &addr_len)) < 0) {
+    if ((clientSocket = accept(serverSocket, (struct sockaddr *)&client, &addr_len)) < 0) {
       printf("Could not accept connection.");
     }
+    // main while loop to allow the user to input multiple SQL commands from client connection
     while (quit_Flag ==  0 && shutdown_Flag == 0){
-      // main while loop to allow the user to input multiple SQL commands from client connection
 
       // receives messages from client and checks if there is a recv error.
-      if((k = recv(new_s,buf,100,0)) < 0){
+      if((k = recv(clientSocket, buf, 100, 0)) < 0){
         printf("Error receiving message from client.\n");
-        //exit(1); // DEBUGGER
+        exit(1);
       }
 
       // copies the received string from buffer and loads into userInput.
@@ -141,7 +141,7 @@ int main(int argc, char* argv[]){
         // Break out of BUY command when user inputs a negative value for crypto_Amount or price_per_crypto
         if(Buy.crypto_Amount <= 0 || Buy.price_per_crypto <= 0){
           returnMessage = "Cannot have negatives or zeroes crypto amounts or prices!!\n";
-          send(new_s,returnMessage,100,0);
+          send(clientSocket,returnMessage,100,0);
           continue;
         }
 
@@ -158,12 +158,12 @@ int main(int argc, char* argv[]){
               sqlite3_exec(DB, sql, callback, 0, &ErrMsg);
             } else {
                 returnMessage = "User does not have enough money.\n";     // Notifies user when they do not have enough money for transaction.
-                send(new_s,returnMessage,100,0);
+                send(clientSocket,returnMessage,100,0);
                 continue;
             }
           } else {
               returnMessage = "User record does not exist.\n";      // Notifies user when there is no existing user with ID input into the system.
-              send(new_s,returnMessage,100,0);
+              send(clientSocket,returnMessage,100,0);
               continue;
           }
         }
@@ -187,7 +187,7 @@ int main(int argc, char* argv[]){
 
         // Final print function to display the new information after the user buys crypto.
         asprintf(&returnMessage, "200 OK\nBOUGHT: New balance: %.1f %s USD balance $%.2f\n", Buy.crypto_Balance, Buy.crypto_Name, Buy.user_Balance - Buy.crypto_Price);
-        send(new_s,returnMessage,100,0);
+        send(clientSocket,returnMessage,100,0);
         continue;
       }
 
@@ -205,7 +205,7 @@ int main(int argc, char* argv[]){
         // Breaks out of SELL command when user inputs a negative value for crypto_Amount or price_per_crypto
         if(Sell.crypto_Amount <= 0 || Sell.price_per_crypto <= 0){
           returnMessage = "Cannot have negatives or zeroes crypto amounts or prices!!\n";
-          send(new_s,returnMessage,100,0);
+          send(clientSocket,returnMessage,100,0);
           continue;
         }
 
@@ -222,12 +222,12 @@ int main(int argc, char* argv[]){
               rc = sqlite3_exec(DB, sql, callback, 0, &ErrMsg);
             } else {
                 returnMessage = "Crypto funds insufficient.\n";     // Notifies the user when there aren't enough funds in usd_balance for user_ID to buy new crypto.
-                send(new_s,returnMessage,100,0);
+                send(clientSocket, returnMessage, 100, 0);
                 continue;
             }
           } else {
               returnMessage = "Crypto record does not exist.\n";    // Notifies the user that the record does not exist when the balance can't be found for crypto_Name.
-              send(new_s,returnMessage,100,0);
+              send(clientSocket, returnMessage, 100, 0);
               continue;
           }
         }
@@ -247,7 +247,7 @@ int main(int argc, char* argv[]){
         
         // Prints the results of the new crypto_Balance after selling and the new user_ID usd_Balance to client.
         asprintf(&returnMessage, "200 OK\nSOLD: New balance: %.1f %s USD balance $%.2f\n", Sell.crypto_Balance - Sell.crypto_Amount, Sell.crypto_Name, Sell.user_Balance);
-        send(new_s,returnMessage,100,0);
+        send(clientSocket, returnMessage, 100, 0);
         continue; //SELL(dbFile, crypto_Name, crypto_Amount, price_per_crypto, user_ID);
       }
 
@@ -273,7 +273,7 @@ int main(int argc, char* argv[]){
             asprintf(&returnMessage, "%d %s %.1f %d\n", List.crypto_ID, List.crypto_Name, List.crypto_Amount, List.user_ID);
             strcat(cryptoTableList, returnMessage);
           }
-          send(new_s,cryptoTableList,100,0);
+          send(clientSocket,cryptoTableList,100,0);
         }
         continue;
       }
@@ -297,7 +297,7 @@ int main(int argc, char* argv[]){
 
         // Notifies the client of the user's account balance after SELL.
         asprintf(&returnMessage, "200 OK\nBalance for user %s %s: $%.2f\n", Bal.first_Name, Bal.last_Name, Bal.user_Balance);
-        send(new_s,returnMessage,100,0);
+        send(clientSocket,returnMessage,100,0);
         continue;
       }
 
@@ -307,7 +307,7 @@ int main(int argc, char* argv[]){
         
         // Notifies the client that the server has shut down.
         returnMessage = "200 OK\nSERVER HAS BEEN SHUT DOWN\n";
-        send(new_s,returnMessage,100,0);
+        send(clientSocket, returnMessage, 100, 0);
         shutdown_Flag = 1;    // When shutdown is called, it sets the shutdown_Flag to one, which ends the do while loop for commands into system.
       }
 
@@ -316,7 +316,7 @@ int main(int argc, char* argv[]){
       else if(strcmp(commands[0],"QUIT\n") == 0){
         // Notifies the client that the server has shut down.
         returnMessage = "200 OK\nQUITTING CLIENT\n";
-        send(new_s,returnMessage,100,0);
+        send(clientSocket,returnMessage,100,0);
         quit_Flag = 1;
       }
       
@@ -324,15 +324,15 @@ int main(int argc, char* argv[]){
       else {
         // Notifies the client to issue another command.
         returnMessage = "Please issue a valid command. Try again.\n";
-        send(new_s,returnMessage,100,0);
+        send(clientSocket,returnMessage,100,0);
       }
     }
     quit_Flag = 0;
-    send(new_s,"Socket closed",100,0);
-    close(new_s);     // Closes the client socket.
+    send(clientSocket,"Socket closed",100,0);     // notifies user that client's socket has been closed.
+    close(clientSocket);                          // closes the client socket.
   }
   printf("\nClosing server...\n");
-  close(s);
-  sqlite3_close(DB);    // Closes DB file.
-  return(0);            // Returns 0 for the main function. 
+  close(serverSocket);      // closes server socket
+  sqlite3_close(DB);        // closes DB file.
+  return(0);                // returns 0 for the main function. 
 }
