@@ -45,13 +45,13 @@ main(int argc, char * argv[])
 
   // establishes new serverSocket and throws error if serversocket < 0.
   if ((clientSocket = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-      printf("Could not create socket.");
+      printf("Could not create socket.\n");
       exit(1);
       }
       
   // connects the socket to the server using the address struct.
   if ((k = connect(clientSocket, (struct sockaddr *)&server, sizeof(server))) < 0) {
-      printf("Could not connect.");
+      printf("Could not connect.\n");
       close(clientSocket);      // closes the socket and exits program.
       exit(1);
   }
@@ -74,13 +74,13 @@ main(int argc, char * argv[])
     // notifies client that there was a sending error.
     k=send(clientSocket, buf, 100, 0);
     if(k==-1){
-      printf("Error in sending");
+      printf("Error in sending\n");
     }
 
     // notifies client that there was a receiving error.
     k=recv(clientSocket, buf, 100, 0);
     if(k==-1){
-      printf("Error in receiving");
+      printf("Error in receiving\n");
     }
 
     printf("s: %s",buf);      // prints server socket's return message.
