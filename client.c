@@ -14,16 +14,19 @@ main(int argc, char * argv[])
 {
   FILE *fp;
   struct hostent *hp;
-  struct sockaddr_in sin;
+  struct sockaddr_in server;
   char *host;
   char buf[MAX_LINE];
-  int s;
+  int s, k;
+  int shutdownFlag = 0; 
+  int quitFlag = 0;
   int len;
+
   if (argc==2) {
     host = argv[1];
   }
   else {
-    fprintf(stderr, "usage: simplex-talk host\n");
+    fprintf(stderr, "Missing host address.\n");
     exit(1); }
 
   /* translate host name into peer’s IP address */
@@ -33,27 +36,49 @@ main(int argc, char * argv[])
   exit(1); }
 
   /* build address data structure */
-  bzero((char *)&sin, sizeof(sin));
-  sin.sin_family = AF_INET;
-  bcopy(hp->h_addr, (char *)&sin.sin_addr, hp->h_length);
-  sin.sin_port = htons(SERVER_PORT);
+  bzero((char *)&server, sizeof(server));
+  server.sin_family = AF_INET;
+  bcopy(hp->h_addr, (char *)&server.sin_addr, hp->h_length);
+  server.sin_port = htons(SERVER_PORT);
 
 /* active open */
   if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-      perror("simplex-talk: socket");
+      printf("Could not create socket.");
       exit(1);
       }
-  if (connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-  {
-      perror("simplex-talk: connect");
+      
+  if ((k = connect(s, (struct sockaddr *)&server, sizeof(server))) < 0) {
+      printf("Could not connect.");
       close(s);
       exit(1);
   }
 
 /* main loop: get and send lines of text */
-  while (fgets(buf, sizeof(buf), stdin)) {
-      buf[MAX_LINE-1] = '\0';
-      len = strlen(buf) + 1;
-      send(s, buf, len, 0);
-  } 
+  while(shutdownFlag == 0 && quitFlag == 0){
+    printf("\nc: ");
+    fgets(buf,100,stdin);
+
+    if(strncmp(buf,"QUIT",4)==0){
+      quitFlag = 1;
+    }
+
+    if(strncmp(buf,"SHUTDOWN",8)==0){
+      shutdownFlag = 1;
+    }
+    //Use "QUIT” to end communication with server
+
+    k=send(s,buf,100,0);
+    if(k==-1){
+      printf("Error in sending");
+    }
+
+    k=recv(s,buf,100,0);
+    if(k==-1){
+      printf("Error in receiving");
+    }
+
+    printf("s: %s",buf);
+  }
+  close(s);
+  return(0);
 }
