@@ -14,7 +14,7 @@ CIS 427
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <sqlite3.h>
+#include "sqlite3.h"
 
 #define SERVER_PORT  5425     // defining SERVER_PORT as the last 4 of my student ID.
 #define MAX_PENDING  5        // defining MAX_PENDING connections as 5.
@@ -272,7 +272,7 @@ int main(int argc, char* argv[]){
         struct Arguments List;      // Declaring new Arguments struct for LIST command.
 
         // Prints "list of record in Cryptos db" to client
-        char cryptoTableList[1024] = "The list of records in the Crypto database for user 1:\n";
+        char cryptoTableList[1024] = "200 OK\nThe list of records in the Crypto database for user 1:\n";
 
         // Function to SELECT and initialize db data into variables so I can display them to the user.
         asprintf(&sql, "SELECT * FROM Cryptos WHERE user_id = 1;");
