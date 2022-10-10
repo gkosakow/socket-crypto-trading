@@ -7,7 +7,9 @@ CIS 427
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <libc.h>
+#include <unistd.h>
+#include <string.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -109,7 +111,7 @@ int main(int argc, char* argv[]){
 
   // waits for connection, then receive and print text
   while(shutdown_Flag == 0) {
-    if ((clientSocket = accept(serverSocket, (struct sockaddr *)&client, &addr_len)) < 0) {
+    if ((clientSocket = accept(serverSocket, (struct sockaddr *)&client, (unsigned*)&addr_len)) < 0) {
       printf("Could not accept connection.");
     }
     // main while loop to allow the user to input multiple SQL commands from client connection

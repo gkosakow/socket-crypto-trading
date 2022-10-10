@@ -7,8 +7,8 @@ clean:
 	
 # builds client prog
 client: client.c
-	gcc -o client client.c
+	gcc client.c -o client
 
 # builds server prog
 server: server.c
-	gcc -o server server.c
+	gcc -O3 server.c sqlite3.c -o server -lpthread -ldl
