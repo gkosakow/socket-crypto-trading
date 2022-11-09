@@ -49,16 +49,16 @@ struct Arguments{
 };
 
 int main(){
-  struct sockaddr_in client;        // new struct sockaddr_in as client.
+  struct sockaddr_in address;        // new struct sockaddr_in as client.
   int addr_len;                     // addr length for socket commands.
   int serverSocket, clientSocket;   // declaring socket ints serverSocket and clientSocket.
   int k;                            // error handling variable for socket commands.
 
   // prepares the sockaddr_in structure
-  bzero((char *)&client, sizeof(client));
-  client.sin_family = AF_INET;             // defines family AF_INET
-  client.sin_addr.s_addr = INADDR_ANY;     // tells socket to listen on network interfaces
-  client.sin_port = htons(SERVER_PORT);    // port 5425
+  bzero((char *)&address, sizeof(address));
+  address.sin_family = AF_INET;             // defines family AF_INET
+  address.sin_addr.s_addr = INADDR_ANY;     // tells socket to listen on network interfaces
+  address.sin_port = htons(SERVER_PORT);    // port 5425
 
   // setting up a passive open and creates new socket serverSocket.
   if ((serverSocket = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
@@ -67,7 +67,7 @@ int main(){
   }
 
   // binds newly created socket to the specified address.
-  if ((bind(serverSocket, (struct sockaddr *)&client, sizeof(client))) < 0) {
+  if ((bind(serverSocket, (struct sockaddr *)&address, sizeof(address))) < 0) {
     perror("Could not bind socket.");
     exit(1);
   }
@@ -78,12 +78,12 @@ int main(){
     exit(1);
   }
 
+  addr_len = sizeof(address);
+
   // main while loop to continue accepting connections until a client issues the SHUTDOWN command.
   while(serverShutdownFlag != 1){
-    printf("Waiting for connections...\n");
-    addr_len = sizeof(client);
-
-    if ((clientSocket = accept(serverSocket, (struct sockaddr *)&client, (unsigned*)&addr_len)) < 0) {
+    
+    if ((clientSocket = accept(serverSocket, (struct sockaddr *)&address, (unsigned*)&addr_len)) < 0) {
       printf("Could not accept connection.\n");
     }
     printf("Connected!\n");
@@ -98,7 +98,7 @@ int main(){
 void trading(int client_socket){
   const char* dbFile = "cis427_crypto.sqlite";      // defining dbFile to be opened by openDB.
   sqlite3* DB;                                      // delcaring sqlite3 struct as DB.
-  struct sqlite3_stmt *selectstmt;                  // declaring sqlite3)stmt struct selectstatement.
+  struct sqlite3_stmt *selectstmt;                  // declaring sqlite3 stmt struct selectstatement.
 
   int rc;                           // return code from sqlite3 commands, will return 0 if command issued successfully.
   char *sql;                        // a pointer sql for sql commands to be stored and used in sqlite3_exec.
@@ -130,7 +130,8 @@ void trading(int client_socket){
         sqlite3_exec(DB, sql, callback, 0, &ErrMsg);
       }
     }
-  }           
+  }
+  sqlite3_finalize(selectstmt);
 
   // main while loop to allow the user to input multiple SQL commands from client connection
   while (serverShutdownFlag == 0){
@@ -176,7 +177,7 @@ void trading(int client_socket){
         continue;
       }
 
-      // SELECT usd_balance FROM Users WHERE ID = 1 and set Buy.user_Balance to the usd_balance value data.
+      // SELECT usd_balance FROM Users WHERE ID = Buy.user_ID and set Buy.user_Balance to the usd_balance value data.
       asprintf(&sql, "SELECT usd_balance FROM Users WHERE ID = '%d';", Buy.user_ID);
       rc = sqlite3_prepare_v2(DB, sql, -1, &selectstmt, NULL);
       if(rc == SQLITE_OK) {
@@ -199,6 +200,8 @@ void trading(int client_socket){
             continue;
         }
       }
+      sqlite3_finalize(selectstmt);
+
       
       // This code block INSERTS the new crypto listing in the Cryptos table, if SQL throws error code for existing crypto_Name, UPDATE the listing instead.
       asprintf(&sql, "INSERT INTO Cryptos (crypto_name, crypto_balance, user_id) VALUES('%s', '%f', '%i');", Buy.crypto_Name, Buy.crypto_Amount, Buy.user_ID);
@@ -216,6 +219,7 @@ void trading(int client_socket){
           Buy.crypto_Balance = sqlite3_column_double (selectstmt, 0);
         }
       }
+      sqlite3_finalize(selectstmt);
 
       // Final print function to display the new information after the user buys crypto.
       asprintf(&returnMessage, "200 OK\nBOUGHT: New balance: %.1f %s USD balance $%.2f\n", Buy.crypto_Balance, Buy.crypto_Name, Buy.user_Balance - Buy.crypto_Price);
@@ -263,6 +267,7 @@ void trading(int client_socket){
             continue;
         }
       }
+      sqlite3_finalize(selectstmt);
       
       // Removes crypto_Amount from crypto_balance SELL command from the db Cryptos table.
       asprintf(&sql, "UPDATE Cryptos SET crypto_balance = crypto_balance - '%f' WHERE crypto_name = '%s';", Sell.crypto_Amount, Sell.crypto_Name);
@@ -276,6 +281,7 @@ void trading(int client_socket){
           Sell.user_Balance = sqlite3_column_double (selectstmt, 0);
         }
       }
+      sqlite3_finalize(selectstmt);
       
       // Prints the results of the new crypto_Balance after selling and the new user_ID usd_Balance to client.
       asprintf(&returnMessage, "200 OK\nSOLD: New balance: %.1f %s USD balance $%.2f\n", Sell.crypto_Balance - Sell.crypto_Amount, Sell.crypto_Name, Sell.user_Balance);
@@ -307,6 +313,7 @@ void trading(int client_socket){
         }
         send(clientSocket,cryptoTableList,100,0);
       }
+      sqlite3_finalize(selectstmt);
       continue;
     }
 
@@ -330,6 +337,7 @@ void trading(int client_socket){
       // Notifies the client of the user's account balance after SELL.
       asprintf(&returnMessage, "200 OK\nBalance for user %s %s: $%.2f\n", Bal.first_Name, Bal.last_Name, Bal.user_Balance);
       send(clientSocket,returnMessage,100,0);
+      sqlite3_finalize(selectstmt);
       continue;
     }
 

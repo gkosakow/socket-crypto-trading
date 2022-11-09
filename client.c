@@ -51,7 +51,7 @@ main(int argc, char * argv[])
       exit(1);
       }
       
-  // connects the socket to the server using the address struct.
+  // throws error if client cannot connect the socket to the server using the address struct.
   if ((k = connect(clientSocket, (struct sockaddr *)&server, sizeof(server))) < 0) {
       printf("Could not connect.\n");
       close(clientSocket);      // closes the socket and exits program.
